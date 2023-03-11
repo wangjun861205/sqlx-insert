@@ -11,7 +11,7 @@ pub fn table_name(attr: TokenStream, item: TokenStream) -> TokenStream {
     let output = quote! {
         impl #ident {
             fn table_name() -> String {
-                "hello".into()
+                #t_name.into()
             }
         }
     };
