@@ -1,21 +1,24 @@
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
+use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::{parse_macro_input, Data::Struct, DeriveInput};
 
 #[proc_macro_attribute]
 pub fn table_name(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let mut ori = TokenStream2::from(item.clone());
     let DeriveInput { ident, .. } = parse_macro_input!(item);
     let t_name = attr.to_string();
     let output = quote! {
         impl #ident {
-            fn table_name() -> String {
+            fn table_name(&self) -> String {
                 #t_name.into()
             }
         }
     };
-    TokenStream::from(output)
+    ori.extend(output);
+    TokenStream::from(ori)
 }
 
 #[proc_macro_derive(Insertable)]
@@ -32,13 +35,13 @@ pub fn insertable(input: TokenStream) -> TokenStream {
     let column_clause = format!("({})", field_names.iter().map(|v| v.to_string()).collect::<Vec<String>>().join(","));
     let values_clause = format!("({})", field_names.iter().enumerate().map(|(i, _)| format!("${}", (i + 1))).collect::<Vec<String>>().join(","));
     let mut body = quote! {
-        let table_name = ident.table_name();
+        let table_name = self.table_name();
         let mut stmt = format!("INSERT INTO {} ", table_name);
         stmt.push_str(#column_clause);
         stmt.push_str(" VALUES ");
         stmt.push_str(#values_clause);
         stmt.push_str(" RETURN id ");
-        let (id, ): (i64, ) = query_as(stmt)
+        let (id, ): (i64, ) = sqlx::query_as(&stmt)
     };
     for f in &field_names {
         body.extend(quote! {
@@ -46,16 +49,17 @@ pub fn insertable(input: TokenStream) -> TokenStream {
         })
     }
     body.extend(quote! {
-        .fetch_one(&mut executor)
+        .fetch_one(executor)
         .await?;
         Ok(id)
     });
-    TokenStream::from(quote! {
+    let func = quote! {
         impl #ident {
-            async fn insert<'e, E, D>(&self, executor: E) -> Result<i64, sqlx::Error> where
+            pub async fn insert<'e, E>(&self, executor: E) -> Result<i64, sqlx::Error> where
             E: 'e + sqlx::Executor<'e, Database=sqlx::Postgres>, {
                 #body
             }
         }
-    })
+    };
+    TokenStream::from(func)
 }
