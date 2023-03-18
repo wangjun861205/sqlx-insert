@@ -41,7 +41,7 @@ pub fn insertable(input: TokenStream) -> TokenStream {
         stmt.push_str(" VALUES ");
         stmt.push_str(#values_clause);
         stmt.push_str(" RETURNING id ");
-        let (id, ): (i64, ) = sqlx::query_as(&stmt)
+        let (id, ): (i32, ) = sqlx::query_as(&stmt)
     };
     for f in &field_names {
         body.extend(quote! {
@@ -55,7 +55,7 @@ pub fn insertable(input: TokenStream) -> TokenStream {
     });
     let func = quote! {
         impl #ident {
-            pub async fn sqlx_insert<'e, E>(&self, executor: E) -> Result<i64, sqlx::Error> where
+            pub async fn sqlx_insert<'e, E>(&self, executor: E) -> Result<i32, sqlx::Error> where
             E: 'e + sqlx::Executor<'e, Database=sqlx::Postgres>, {
                 #body
             }
